@@ -1,0 +1,11 @@
+node_modules/
+backend/.env
+backend/data/
+*.log
+.DS_Store
+mobile/android/local.properties
+mobile/android/.gradle/
+mobile/android/**/build/
+mobile/ios/Pods/
+mobile/ios/build/
+*.apk
