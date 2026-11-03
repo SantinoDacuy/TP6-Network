@@ -391,7 +391,7 @@ function Main() {
                         MAC {item.mac || 'no disponible'}
                         {item.macSource ? ` · ${item.macSource}` : ''}
                       </Text>
-                      {item.barcode && (
+                      {!!item.barcode && (
                         <Text style={s.muted}>Código: {item.barcode}</Text>
                       )}
                       <Text style={s.small}>
@@ -498,7 +498,7 @@ function Main() {
                       >
                         Verificar huella del equipo
                       </Button>
-                      {pin && <Text style={s.code}>{pin}</Text>}
+                      {!!pin && <Text style={s.code}>{pin}</Text>}
                       <Button
                         secondary
                         disabled={!!busy || !username || !password}
@@ -860,7 +860,7 @@ function Main() {
                       Intentos fallidos: {job.attempts} ·{' '}
                       {timestamp(job.createdAt)}
                     </Text>
-                    {job.error && <Text style={s.error}>{job.error}</Text>}
+                    {!!job.error && <Text style={s.error}>{job.error}</Text>}
                     {job.nextAt > 0 && job.status !== 'done' && (
                       <Text style={s.muted}>
                         Próximo intento: {timestamp(job.nextAt)}

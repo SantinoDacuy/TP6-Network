@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "Network Diagnostics Suite",
+    "slug": "network-diagnostics-suite",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Leer QR/códigos de barras de equipos y fotografiar evidencia de instalación.",
+        "NSLocationWhenInUseUsageDescription": "Georreferenciar fotos y reportes de instalación.",
+        "NSLocalNetworkUsageDescription": "Comunicarse con el gateway de diagnóstico en la red local."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Leer QR/códigos de barras de equipos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Georreferenciar fotos y reportes de instalación."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Fotografiar evidencia de instalación."
+        }
+      ]
+    ]
+  }
+}

@@ -6,5 +6,5 @@ ssh-keygen -A
 echo 'Comparar esta huella con la mostrada por la app:'
 ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256
 ssh-keygen -lf /etc/ssh/ssh_host_rsa_key.pub -E sha256
-/usr/sbin/snmpd -f -Lo -c /etc/snmp/snmpd.conf &
+/usr/sbin/snmpd -f -Lo -C -c /etc/snmp/snmpd.conf &
 exec /usr/sbin/sshd -D -e

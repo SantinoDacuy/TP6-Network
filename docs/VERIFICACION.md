@@ -22,9 +22,25 @@ Fecha: 27 de octubre de 2026. Entorno de preparación: Windows, Node.js 22.14.0,
 
 Las pruebas HTTP corrieron fuera de la restricción de red del sandbox, usando solo puertos temporales de loopback. Los primeros intentos dentro del sandbox fallaron al conectar a localhost; no se ocultaron errores de aplicación para obtener el resultado aprobado.
 
-## Pendiente en un entorno Android
+## Compilación Android (28 de octubre de 2026)
 
-No se ejecutó Gradle ni se generó un APK: no se encontró Android SDK, JDK 17 o Android Studio en las ubicaciones habituales ni variables de SDK configuradas. El Java localizado corresponde a una instalación Java 8. La validación XML/Metro no demuestra que el código Kotlin compile.
+- `docker/build-apk.ps1` (JDK 17, Node 22.14, SDK Platform 37.0, Build Tools 37.0.0, NDK 27.1.12297006): `gradlew assembleRelease` → **BUILD SUCCESSFUL**. El código Kotlin de FieldKit y ReportPdf compila (solo advertencias de deprecación).
+- `aapt2 dump badging`: paquete `com.networkdiagnostics`, compileSdk 37, targetSdk 36, los siete permisos declarados, ABIs `arm64-v8a` y `x86_64`.
+- El APK contiene `assets/index.android.bundle` (funciona sin Metro) y `apksigner verify` lo acepta (firma de depuración de la plantilla).
+- Se corrigió el nombre del paquete del SDK (`platforms;android-37.0`) en el workflow de CI.
+- `network_security_config.xml` ya no depende de una IP fija del PC: la restricción de HTTP a LAN/loopback la aplican `validateBackend` y `uploadFile`.
+
+- Agente de laboratorio (`lab/`): se corrigió `entrypoint.sh` (snmpd cargaba dos veces su configuración y fallaba al abrir UDP/161). Con el contenedor activo, el codec propio `mobile/src/core/snmp.mjs`, enviando por UDP desde Windows a `127.0.0.1:161`, decodificó respuestas reales de Net-SNMP en v1 y v2c: sysName `tp6-network-agent`, sysUpTime, ifNumber 2, ifDescr.2 `eth0`, ifInOctets/ifOutOctets.
+
+## Versión Expo Go (28 de octubre de 2026)
+
+- `expo-app/` en Expo SDK 58: `npx expo export` genera los bundles de **iOS** (721 módulos) y **web** sin errores; `expo-doctor` 20/20 checks.
+- Con `npm run dev`, el manifiesto de Expo anuncia `192.168.18.171` (Wi-Fi) y el bundle de iOS se descarga por esa IP (HTTP 200).
+- Gateway contra la LAN real y el agente `lab/`: descubrimiento de 6 equipos reales con IP+MAC (incluido el router 192.168.18.1) en 7,5 s; SNMP v2c con el codec propio a través del relay (sysName, uptime, ifDescr, octetos); huella SSH idéntica a la del contenedor, ejecución del perfil linux (3 comandos, exit 0), rechazo de pin incorrecto y de destino UDP público.
+- PDF propio: validado con PyMuPDF (sin reparaciones, 3 páginas, 2 imágenes DCTDecode) y revisado visualmente; `npm test` 18/18 (incluye `tests/pdf.test.mjs`).
+- No se probó en un iPhone desde esta sesión: cámara/QR en vivo, GPS, Keychain, `expo-file-system` upload y compartir PDF quedan para la prueba en el dispositivo.
+
+## Pendiente en un dispositivo
 
 No hubo teléfono/emulador disponible. Por tanto quedan sin confirmar en dispositivo: carga del módulo FieldKit, navegación visual, descubrimiento LAN, intercambio SNMP contra agente real, conexión SSH, permisos, captura/lectura QR, GPS, generación/render visual del PDF y subida de archivos mediante el adaptador nativo. Los fixtures de las pruebas HTTP son contenido binario mínimo; no son fotografías o PDFs de una instalación real.
 

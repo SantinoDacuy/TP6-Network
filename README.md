@@ -1,110 +1,137 @@
 # Network Diagnostics Suite
 
-Aplicación Android en React Native para el TP6 de Desarrollo de Aplicaciones Móviles. Descubrimiento LAN, SNMP v1/v2c con BER propio, SSH, QR/barras por fotografía, evidencia GPS, PDF y sincronización diferida.
+Toolkit móvil **offline-first** para técnicos de campo que instalan y mantienen infraestructura de telecomunicaciones (ONTs, routers, switches). Descubre equipos en la LAN, los consulta por **SNMP v1/v2c con un codec BER propio**, ejecuta diagnósticos por **SSH** con verificación de huella, identifica equipos por **QR/código de barras**, documenta instalaciones con **fotos georreferenciadas y PDF**, y sincroniza todo con un backend mediante una **cola outbox** cuando vuelve la conectividad.
 
-## Estado de entrega
+TP6 · Desarrollo de Aplicaciones Móviles 2026 · Licenciatura en Sistemas de Información · React Native.
 
-Se incluye el código de la app, proyecto nativo Android, backend ejecutable, pruebas, documentación técnica, laboratorio opcional y flujo de CI para generar un APK de prueba. La verificación del código JavaScript y del backend se registra en `docs/VERIFICACION.md`.
+## Requisitos funcionales
 
-**El APK y la demo con un equipo físico requieren completar la compilación y las pruebas en Android.** No se presenta una captura simulada como prueba de funcionamiento real. Este equipo de trabajo no dispone del JDK/SDK de Android necesarios para compilar ni de un teléfono conectado. La carpeta iOS proviene de la plantilla oficial; FieldKit está implementado únicamente para Android.
+| RF | Requisito | Implementación |
+|---|---|---|
+| RF-01 | Escanear la LAN y listar equipos (IP, MAC, hostname) | Barrido TCP del /24 + tabla ARP (Expo) · mDNS/NSD + sondeo TCP (Android nativo) |
+| RF-02 | SNMP: uptime, sysName, tráfico de interfaces | GetRequest/GetResponse v1/v2c armado y parseado con BER propio (`mobile/src/core/snmp.mjs`), dos muestras para calcular bits/s |
+| RF-03 | SSH con comandos predefinidos | Perfiles fijos `linux` / `routeros` / `cisco`, huella SHA256 fijada por el técnico, credenciales en Keychain/Keystore |
+| RF-04 | QR/barras asociado a ficha técnica remota | Cámara en vivo (`expo-camera`) o ML Kit (Android), ficha del backend con caché local |
+| RF-05 | Instalación con fotos, GPS y notas | Cada foto guarda coordenadas, precisión y hora; el borrador persiste localmente |
+| RF-06 | Reporte PDF de instalación | Generador PDF propio con fotos embebidas (Expo) · `PdfDocument` (Android) |
+| RF-07 | Operación offline y cola de sincronización | Outbox persistente con reintentos y backoff, disparo por NetInfo, deduplicación por `eventId` en el backend |
+| RF-08 | Historial consultable sin conexión | Historial de diagnósticos y reportes desde la base local |
 
-## Inicio rápido del backend
+## Arquitectura
 
-Requisito: Node.js 22.13 o superior. El backend usa módulos incluidos con Node; no requiere `npm install`.
+El repositorio tiene **dos clientes** sobre el mismo núcleo JavaScript, más un backend:
 
-Desde esta carpeta:
-
-```powershell
-npm run backend:demo
+```
+                    ┌──────────────── núcleo compartido (mobile/src/core) ────────────────┐
+                    │  snmp.mjs  codec BER / PDUs SNMP      store.mjs  repositorio + outbox │
+                    └──────────────────────────────────────────────────────────────────────┘
+expo-app/  ── Expo Go (iOS / Android) y navegador ──► backend/ gateway de campo ──► LAN (UDP/161, TCP, SSH)
+mobile/    ── React Native nativo Android (APK) ───────────── sockets propios ─────► LAN
+                        └────────────── sincronización HTTP ──────────────► backend/ (reportes, fotos, PDF, catálogo)
 ```
 
-La demo escucha en el puerto 8787 y usa el token público de laboratorio `tp6-demo-local-2026`. Guardá ese token en **Ajustes** de la app. Para una configuración propia:
+- **`expo-app/`** corre en **Expo Go** y en el navegador. Expo Go no permite sockets UDP/TCP crudos ni SSH, así que esas operaciones las ejecuta un **gateway de campo** (`backend/gateway.mjs`) dentro de la misma LAN. El teléfono sigue armando y decodificando las PDUs SNMP: el gateway solo reenvía bytes a UDP/161.
+- **`mobile/`** es la versión **Android nativa** (módulo Kotlin propio, FieldKit). Abre los sockets desde el propio teléfono, sin gateway; se instala como APK.
+- **`backend/`** recibe la cola de sincronización (archivos con checksum SHA-256 + reporte idempotente), sirve el catálogo de fichas técnicas y expone el gateway. Exige token Bearer y solo admite destinos IPv4 privados.
+
+El detalle del subconjunto SNMP implementado, el manejo de credenciales SSH, el diseño de la cola offline y los límites de seguridad está en [`docs/TECNICO.md`](docs/TECNICO.md).
+
+## Puesta en marcha
+
+Requisitos: **Node.js 22.13+** y **Docker Desktop** (para el equipo SNMP/SSH de laboratorio).
 
 ```powershell
-Copy-Item backend/.env.example backend/.env
-# Editar SYNC_TOKEN y, si hace falta, HOST/PORT/DATA_DIR.
-npm run backend
+git clone https://github.com/SantinoDacuy/TP6-Network.git
+cd TP6-Network
+npm install                     # dependencias del backend/gateway (ssh2)
+npm run app:install             # dependencias de expo-app
+docker build -t tp6-agent lab   # equipo de laboratorio: Net-SNMP + OpenSSH
 ```
 
-El backend conserva reportes e IDs de reintento en `backend/data/store.json` y archivos en `backend/data/blobs/`. Iniciá una sola instancia por directorio de datos. La ficha remota de ejemplo corresponde al código **ONT-DEMO-001**. Para cargar el inventario real, detené el servidor y editá el objeto `catalog` de `store.json`; después reinicialo.
-
-## Ejecutar la app Android
-
-Instalá Node 22.13+, JDK 17 y Android Studio. En SDK Manager instalá Android SDK Platform 37, Build Tools 37.0.0, Platform Tools, NDK 27.1.12297006 y CMake 3.22.1. Configurá `JAVA_HOME` y `ANDROID_HOME` para esas instalaciones. La app usa React Native 0.88.1, minSdk 24 y targetSdk 36, según la plantilla fijada.
+Cada vez, en terminales separadas:
 
 ```powershell
-cd mobile
-npm ci
-npm start
+npm run backend:demo   # backend + gateway en :8787 (token de laboratorio tp6-demo-local-2026)
+npm run lab            # equipo de laboratorio: SNMP en UDP/161, SSH en TCP/2222
+npm run dev            # Expo; muestra un QR para Expo Go. Tecla w = versión web
 ```
 
-En otra terminal, dentro de `mobile`, con un teléfono conectado por USB y depuración activada:
+- **Teléfono:** escaneá el QR con la cámara (iPhone) o desde Expo Go (Android), en el mismo Wi-Fi que la PC. `npm run dev` anuncia la IP del Wi-Fi y descarta adaptadores virtuales (VirtualBox/WSL).
+- **Navegador:** tecla `w`, o abrí `http://localhost:8081`.
+- La primera vez la app configura sola la URL del backend y el token de laboratorio (se pueden cambiar en **Ajustes**).
+
+Si el teléfono no llega a la PC, permití los puertos en Windows (PowerShell como administrador):
 
 ```powershell
-npm run android
+Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private
+New-NetFirewallRule -DisplayName "TP6 TCP" -Direction Inbound -Protocol TCP -LocalPort 8081,8787,8788,2222 -Action Allow -Profile Private
+New-NetFirewallRule -DisplayName "TP6 SNMP" -Direction Inbound -Protocol UDP -LocalPort 161 -Action Allow -Profile Private
 ```
 
-Expo Go no carga el módulo nativo FieldKit. Para la LAN, cámara y GPS se recomienda un teléfono físico conectado al mismo Wi-Fi que el equipo de red. Un emulador no reproduce el descubrimiento de la LAN física de forma equivalente.
+## Uso
 
-## Conectar el backend
+| Pestaña | Qué se hace |
+|---|---|
+| **Red** | *Explorar red local* lista los equipos con IP, MAC y origen. *Agregar por IP* suma uno manualmente. Con un equipo seleccionado: **Diagnóstico SNMP** (community, ifIndex, v1/v2c), **Acceso SSH** (verificar huella → guardar credenciales → ejecutar comandos) y **Identificar equipo** (QR/barras). |
+| **Instalación** | Sitio, técnico, notas y fotos con GPS. *Guardar instalación y generar PDF* guarda el reporte y lo encola en una misma transacción. |
+| **Historial** | Reportes y diagnósticos sin conexión; ver/compartir el PDF. |
+| **Cola** | Estado de cada envío (PENDIENTE, ENVIANDO, REINTENTO, ENVIADO), último error y próximo intento. *Sincronizar ahora* fuerza un intento. |
+| **Ajustes** | URL del backend y token. |
 
-- Emulador Android: `http://10.0.2.2:8787`.
-- Teléfono físico: `http://IP-DEL-PC:8787`, con ambos equipos en la misma LAN. El servidor de demo escucha en todas las interfaces. Habilitá el puerto en el firewall si corresponde a tu laboratorio.
-- Alternativa USB: `adb reverse tcp:8787 tcp:8787` y URL `http://127.0.0.1:8787`.
-- Servidor remoto: usá HTTPS con certificado válido.
+Valores del equipo de laboratorio (`lab/`), que la app trae precargados: IP de la PC (por ejemplo `192.168.18.171`), community `tp6lab`, ifIndex `2` (eth0), SNMP v2c, SSH puerto `2222`, usuario `tech`, contraseña `Tp6Lab2026`, perfil `linux`. La huella SSH a comparar la imprime el contenedor al arrancar (`docker logs tp6-agent`). El código de ejemplo para la ficha remota es `ONT-DEMO-001` ([QR](docs/qr-ONT-DEMO-001.png)).
 
-Android permite HTTP únicamente para las direcciones explícitas en `mobile/android/app/src/main/res/xml/network_security_config.xml`: `10.0.2.2`, `127.0.0.1`, `localhost` y la dirección de ejemplo `192.168.1.10`. **Si el PC tiene otra IP, reemplazá la dirección de ejemplo y recompilá.** La validación de la app también impide HTTP hacia hosts públicos. El token de laboratorio viaja sin cifrado si elegís HTTP; esa excepción está limitada al entorno de pruebas. Las conexiones SSH y los sockets SNMP no usan HTTP.
+### Probar el flujo offline
 
-## Flujo de uso
-
-1. En **Red**, explorá el /24 local o agregá una IPv4 privada. Elegí el equipo.
-2. Ingresá su community, versión SNMP e `ifIndex` válido. Consultá estado y tráfico. El agente SNMP del equipo debe estar habilitado y permitir UDP/161 desde el teléfono.
-3. Para SSH, elegí puerto y perfil; compará la huella con la consola del equipo antes de guardarla. Guardá usuario/contraseña y ejecutá el conjunto fijo de comandos.
-4. Leé un QR/código de barras fotografiándolo. La lectura se hace en el dispositivo; la ficha remota se guarda en caché si está disponible.
-5. En **Instalación**, completá sitio/notas/técnico y agregá fotos. Se solicitan cámara y ubicación. Cada foto conserva coordenadas, precisión y fecha. El borrador se persiste localmente.
-6. Guardá la instalación. Se genera el PDF y se guardan instalación y outbox en una misma transacción. Consultá o compartí el PDF desde **Historial**.
-7. Si no hay backend accesible, el reporte sigue disponible localmente. Al reconectar con la app activa o al reabrirla, se reintenta. **Cola → Sincronizar ahora** permite forzar un intento.
-
-## APK para probar sin Metro
-
-Con el entorno Android preparado:
+1. Con el backend activo: descubrir equipos y consultar SNMP/SSH.
+2. Detener el backend (`Ctrl+C` en su terminal).
+3. Registrar una instalación con foto y GPS y abrir el PDF: todo funciona sin backend.
+4. En **Cola**, el reporte queda en **REINTENTO**.
+5. Volver a iniciar `npm run backend:demo` y tocar *Sincronizar ahora* (o esperar el reintento automático): pasa a **ENVIADO**.
+6. Verificar del lado servidor:
 
 ```powershell
-cd mobile/android
-.\gradlew.bat assembleRelease
+Invoke-RestMethod http://127.0.0.1:8787/api/installations -Headers @{ Authorization = 'Bearer tp6-demo-local-2026' }
 ```
 
-Resultado: `mobile/android/app/build/outputs/apk/release/app-release.apk`. Esta variante incluye el bundle JavaScript y funciona sin Metro. Se firma con la **clave de depuración de la plantilla**, exclusivamente para la entrega académica. No es una firma para publicar en una tienda. La compilación inicial descarga Gradle, Maven y componentes nativos.
+## Versión Android nativa (APK)
 
-El workflow `.github/workflows/verify.yml` ejecuta pruebas/lint y tiene un trabajo de compilación que publica el APK como artefacto de CI cuando se sube el repositorio a GitHub. El proyecto no fue publicado en ningún servicio desde esta entrega.
+```powershell
+npm run apk:build   # compila el APK dentro de Docker (JDK 17 + Android SDK 37); no requiere Android Studio
+npm run apk:share   # sirve el APK en la LAN y muestra un QR para descargarlo desde el teléfono
+```
+
+Resultado: `dist/NetworkDiagnostics-release.apk` (arm64-v8a y x86_64), firmado con la clave de depuración de la plantilla, solo para la entrega académica. Con Android Studio instalado también se puede usar `cd mobile && npm ci && npm run android`. La configuración de red, firma y alcance de esta variante está en [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Pruebas
 
 ```powershell
-# Desde la raíz: codec, persistencia/outbox y HTTP real contra el backend local.
-npm test
-
-cd mobile
-npm run lint
+npm test               # codec SNMP, repositorio/outbox, backend HTTP real, generador PDF
+cd mobile; npm run lint
 ```
 
-Las pruebas automatizadas usan fixtures y puertos loopback temporales. No reemplazan las comprobaciones físicas de SNMP/SSH/cámara/GPS/PDF detalladas en `docs/DEMO.md`.
+Las pruebas usan fixtures y puertos loopback temporales. Lo verificado en equipos reales y lo que queda pendiente se registra en [`docs/VERIFICACION.md`](docs/VERIFICACION.md).
 
-## Organización
+## Estructura
 
-- `mobile/App.jsx`: interfaz y navegación por pestañas.
-- `mobile/src/core/snmp.mjs`: construcción/parsing BER y PDUs SNMP.
-- `mobile/src/core/store.mjs`: repositorio local y máquina de sincronización.
-- `mobile/src/services.js`: casos de uso e integración del transporte.
-- `mobile/android/.../FieldKitModule.kt`: sockets, mDNS, SQLite, Keystore, SSH, cámara, GPS y archivos.
-- `mobile/android/.../ReportPdf.kt`: composición nativa del reporte.
-- `backend/`: HTTP, archivos, catálogo y deduplicación persistente.
-- `tests/`: pruebas ejecutables con Node.
-- `docs/TECNICO.md`: decisiones, protocolo y límites.
-- `docs/DEMO.md`: laboratorio y guion de validación/grabación.
+```
+backend/          servidor de sincronización (server.mjs) y gateway de campo (gateway.mjs)
+expo-app/         cliente Expo Go / web: App.js, src/services.js, src/platform.{native,web}.js, src/core/pdf.mjs
+mobile/           cliente Android nativo: App.jsx, src/services.js, android/.../FieldKitModule.kt, ReportPdf.kt
+mobile/src/core/  núcleo compartido: snmp.mjs (BER/SNMP), store.mjs (repositorio + outbox), backend.mjs
+lab/              contenedor con Net-SNMP y OpenSSH para pruebas
+docker/           compilación del APK en contenedor
+scripts/          dev.mjs (backend + Expo con la IP correcta), share-apk.mjs
+tests/            pruebas con node:test
+docs/             TECNICO.md (diseño y límites), DEMO.md (guion de validación), VERIFICACION.md
+```
 
 ## Decisiones frente al stack sugerido
 
-La consigna presenta un stack sugerido. Esta implementación conserva React Native y los requisitos de protocolos binarios/offline, pero concentra los adaptadores Android en FieldKit: SQLite en lugar de WatermelonDB, Keystore directo en lugar de react-native-keychain, NSD/sockets nativos, JSch para SSH, ML Kit embebido para lectura por foto, LocationManager y PdfDocument. No se incluyeron wrappers sin integración. El documento técnico explica las diferencias y sus límites.
+La consigna propone un stack orientativo. Se conservaron React Native, los protocolos binarios propios y el diseño offline-first, con estas sustituciones (justificadas en `docs/TECNICO.md`):
 
-Si la cátedra exige nominalmente WatermelonDB o los paquetes sugeridos, hay que sustituir esos adaptadores antes de la entrega. El parser SNMP y la máquina outbox están separados de esas dependencias.
+- **SQLite** (`expo-sqlite` / SQLite de Android) con una máquina outbox propia en lugar de WatermelonDB.
+- **Keychain/Keystore** vía `expo-secure-store` o Android Keystore directo en lugar de `react-native-keychain`.
+- **Generador PDF propio / PdfDocument** en lugar de `react-native-html-to-pdf`.
+- En la versión Expo, **gateway de campo** para los sockets que Expo Go no expone; la consigna advierte que el planteo original no es compatible con Expo Go, y la versión `mobile/` cubre ese caso sin gateway.
+
+SNMP se limita a GetRequest v1/v2c sin SNMPv3: la community viaja en claro por la LAN, por lo que el alcance es una red de diagnóstico controlada.

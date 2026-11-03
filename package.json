@@ -4,9 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "app:install": "cd expo-app && npm install",
     "test": "node --test tests/*.test.mjs",
     "backend": "node --env-file=backend/.env backend/server.mjs",
-    "backend:demo": "node backend/demo.mjs"
+    "backend:demo": "node backend/demo.mjs",
+    "apk:share": "node scripts/share-apk.mjs",
+    "apk:build": "powershell -ExecutionPolicy Bypass -File docker/build-apk.ps1",
+    "lab": "docker run --rm --name tp6-agent -e LAB_PASSWORD=Tp6Lab2026 -p 2222:22 -p 161:161/udp tp6-agent"
   },
-  "engines": { "node": ">=22.13.0" }
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0"
+  }
 }

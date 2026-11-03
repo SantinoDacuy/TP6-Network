@@ -1,6 +1,6 @@
 # Agente de laboratorio opcional
 
-Este contenedor ofrece un agente Net-SNMP real y un servidor OpenSSH. No se ejecutó Docker durante la preparación de la entrega. Requiere Docker instalado y configuración de red que permita llegar a UDP/161 del host desde el teléfono.
+Este contenedor ofrece un agente Net-SNMP real y un servidor OpenSSH. Probado con Docker Desktop el 28/10/2026: snmpd responde en UDP/161 y sshd en el puerto 2222 del host. Requiere Docker instalado y configuración de red que permita llegar a UDP/161 del host desde el teléfono.
 
 ```powershell
 docker build -t tp6-agent lab

@@ -99,3 +99,18 @@ Referencias primarias consultadas:
 - [Permisos de red local de Android](https://developer.android.com/privacy-and-security/local-network-permission).
 
 Target SDK 36 conserva el acceso LAN bajo INTERNET en el modelo normal. Si se eleva targetSdk a 37, hay que adaptar el permiso runtime ACCESS_LOCAL_NETWORK conforme a la documentación Android; esta entrega no hace esa migración.
+
+## Versión Expo Go (iOS/Android/web) y gateway de campo
+
+`expo-app/` es una segunda interfaz de la misma suite, pensada para dispositivos donde no se puede instalar el APK (iPhone sin Mac/Xcode ni cuenta de Apple Developer). Expo Go solo incluye sus módulos nativos precompilados: no expone sockets UDP/TCP crudos ni SSH, y en iOS el multicast/mDNS requiere además un entitlement de Apple. Por eso la consigna advierte que el proyecto, tal como se plantea, no es compatible con Expo Go.
+
+La solución separa responsabilidades:
+
+- **En el teléfono** (igual que en Android): construcción y parsing de las PDUs SNMP con el codec BER propio (`mobile/src/core/snmp.mjs`, compartido vía `watchFolders` de Metro), cola outbox y repositorio (`store.mjs`), verificación de huella SSH por el técnico, credenciales en Keychain/Keystore (`expo-secure-store`, `WHEN_UNLOCKED_THIS_DEVICE_ONLY`), cámara para QR/barras en vivo (`expo-camera`), fotos (`expo-image-picker` + `expo-image-manipulator`, que normaliza la orientación EXIF), GPS (`expo-location`), SQLite transaccional (`expo-sqlite`), disparo de sincronización con `@react-native-community/netinfo` y PDF.
+- **En el gateway de campo** (`backend/gateway.mjs`, el mismo proceso del backend, corriendo en una laptop/Raspberry dentro de la LAN del sitio): solo las operaciones de socket. `POST /api/gateway/discover` barre el /24 de la interfaz por la que llegó el pedido (TCP 22/23/80/443/8080, 64 conexiones en paralelo, un RST cuenta como host vivo) y luego lee la tabla ARP del sistema (`arp -a` / `ip neigh`): devuelve IP, **MAC real** y hostname por DNS inverso cuando existe. `POST /api/gateway/udp` reenvía bytes a UDP/161 de una IPv4 privada y devuelve los bytes de la respuesta sin interpretarlos. `POST /api/gateway/ssh/fingerprint` y `/ssh/exec` usan `ssh2` con el mismo conjunto fijo de comandos por perfil y verifican la huella SHA256 fijada por el técnico; si no coincide, no se autentica.
+
+Límites y seguridad: todo el gateway exige el token Bearer y solo admite destinos IPv4 privados; el relay UDP solo admite el puerto 161. Las credenciales SSH viajan del teléfono al gateway en cada ejecución por la LAN del laboratorio (HTTP con token); en un despliegue real el gateway debe servirse por HTTPS. El gateway no persiste credenciales ni communities. Sin gateway alcanzable, la app sigue operando offline (historial, fichas en caché, borradores, instalaciones, PDF y cola); descubrimiento, SNMP y SSH requieren el gateway en la misma red.
+
+PDF: `expo-print` en web solo abre el diálogo de impresión, así que `expo-app/src/core/pdf.mjs` genera un PDF 1.4 propio (Helvetica WinAnsi en cadenas hexadecimales, paginación y fotos JPEG embebidas con DCTDecode sin recomprimir). Es JavaScript puro: el mismo código corre en Expo Go y en el navegador, y lo cubren pruebas con Node (`tests/pdf.test.mjs`).
+
+Modo navegador: misma UI con `react-native-web`; el estado y los secretos van en `localStorage` (el navegador no tiene Keychain) y los archivos como data URIs, así que admite pocas fotos. Es un modo de demostración desde el PC del laboratorio, no la plataforma objetivo.

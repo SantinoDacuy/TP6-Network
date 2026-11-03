@@ -9,3 +9,7 @@ mobile/android/**/build/
 mobile/ios/Pods/
 mobile/ios/build/
 *.apk
+dist/
+expo-app/.claude/
+# Consigna de la cátedra: no se redistribuye
+TP6_Network_Diagnostics_Suite.pdf

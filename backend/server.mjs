@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile, rename, stat } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import * as gateway from "./gateway.mjs";
 
 const idPattern = /^[a-zA-Z0-9_-]{8,100}$/;
 const validId = (value) => typeof value === "string" && idPattern.test(value);
@@ -139,6 +140,14 @@ export async function createServer({ dataDir, token }) {
     return op;
   };
   const server = http.createServer(async (req, res) => {
+    // CORS para el modo navegador (Expo web). La autorización sigue siendo el token Bearer.
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Content-SHA256");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+    if (req.method === "OPTIONS") {
+      res.writeHead(204).end();
+      return;
+    }
     const send = (status, value) => {
       res.writeHead(status, {
         "Content-Type": "application/json; charset=utf-8",
@@ -293,6 +302,25 @@ export async function createServer({ dataDir, token }) {
           return result;
         });
         send(200, ack);
+        return;
+      }
+      const operation = {
+        "/api/gateway/discover": () => gateway.discover(req.socket.localAddress),
+        "/api/gateway/udp": gateway.udpExchange,
+        "/api/gateway/ssh/fingerprint": gateway.sshFingerprint,
+        "/api/gateway/ssh/exec": gateway.executeSsh,
+      }[url.pathname];
+      if (req.method === "POST" && operation) {
+        let input;
+        try {
+          input = JSON.parse((await body(req, 256 * 1024)).toString("utf8") || "{}");
+        } catch (e) {
+          if (e.status) {
+            throw e;
+          }
+          fail("JSON inválido");
+        }
+        send(200, await operation(input));
         return;
       }
       send(404, { error: "Ruta no encontrada" });
