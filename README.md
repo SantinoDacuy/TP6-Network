@@ -4,6 +4,19 @@ Toolkit móvil **offline-first** para técnicos de campo que instalan y mantiene
 
 TP6 · Desarrollo de Aplicaciones Móviles 2026 · Licenciatura en Sistemas de Información · React Native.
 
+## Entrega
+
+| Entregable (consigna §07) | Dónde está |
+|---|---|
+| Código fuente completo en Git | Este repositorio |
+| Build de prueba (APK) | [**Releases → `NetworkDiagnostics-release.apk`**](https://github.com/SantinoDacuy/TP6-Network/releases/latest) · también se genera con `npm run apk:build` y en cada push como artefacto de GitHub Actions |
+| Documento técnico: subset SNMP, credenciales SSH y cola offline | [`docs/TECNICO.md`](docs/TECNICO.md) |
+| Backend mínimo de sincronización | [`backend/`](backend/) (`npm run backend:demo`) |
+| Video demo: descubrimiento, SNMP, PDF con foto y GPS, sincronización | Entregado por separado; guion en [`docs/DEMO.md`](docs/DEMO.md) |
+| Registro de lo verificado | [`docs/VERIFICACION.md`](docs/VERIFICACION.md) |
+
+El APK instala la versión Android nativa (`mobile/`) en cualquier teléfono Android 7+: abrir el archivo y aceptar "instalar apps de origen desconocido". En iPhone y en el navegador se usa la versión Expo (`expo-app/`, ver [Puesta en marcha](#puesta-en-marcha)).
+
 ## Requisitos funcionales
 
 | RF | Requisito | Implementación |
@@ -35,6 +48,24 @@ mobile/    ── React Native nativo Android (APK) ─────────�
 - **`backend/`** recibe la cola de sincronización (archivos con checksum SHA-256 + reporte idempotente), sirve el catálogo de fichas técnicas y expone el gateway. Exige token Bearer y solo admite destinos IPv4 privados.
 
 El detalle del subconjunto SNMP implementado, el manejo de credenciales SSH, el diseño de la cola offline y los límites de seguridad está en [`docs/TECNICO.md`](docs/TECNICO.md).
+
+## Tecnologías utilizadas
+
+| Capa | Versión Expo (`expo-app/`) | Versión Android nativa (`mobile/`) |
+|---|---|---|
+| Framework | Expo SDK 58 · React Native 0.88 · React 19.3 · react-native-web | React Native 0.88.1 · Kotlin 2.2 · minSdk 24 / targetSdk 36 |
+| Descubrimiento | Gateway: barrido TCP + tabla ARP (`node:net`) | Android NSD (mDNS) + sockets TCP |
+| SNMP v1/v2c | Codec BER propio (`snmp.mjs`) + relay UDP del gateway (`node:dgram`) | Codec BER propio (`snmp.mjs`) + `DatagramSocket` |
+| SSH | Gateway con `ssh2` 1.17 | JSch 2.28.7 (mwiede) |
+| Credenciales | `expo-secure-store` (Keychain / Keystore) | Android Keystore (AES-GCM) |
+| QR / barras | `expo-camera` (lectura en vivo) | ML Kit Barcode Scanning 17.3 |
+| Fotos y GPS | `expo-image-picker`, `expo-image-manipulator`, `expo-location` | Intent de cámara, ExifInterface, `LocationManager` |
+| Base local | `expo-sqlite` (web: `localStorage`) | SQLite de Android |
+| Archivos | `expo-file-system`, `expo-sharing` | FileProvider |
+| PDF | Generador PDF 1.4 propio en JS (`pdf.mjs`) | `android.graphics.pdf.PdfDocument` |
+| Sincronización | `@react-native-community/netinfo` + outbox propia (`store.mjs`) | `ConnectivityManager` + outbox propia (`store.mjs`) |
+
+Backend y herramientas: Node.js 22 (`node:http`, sin framework), `node:test`, Docker (Net-SNMP 5.9 + OpenSSH en `lab/`, JDK 17 + Android SDK 37 en `docker/`), GitHub Actions.
 
 ## Puesta en marcha
 
